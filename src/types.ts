@@ -9,6 +9,7 @@ export interface Env {
   AI: Ai;
   ASSETS: Fetcher;
   RESEND_API_KEY: string;
+  RESEND_WEBHOOK_SECRET: string;
 }
 
 export interface ResumenPersona {
@@ -34,6 +35,7 @@ export interface ResumenTriggerMessage {
 export type ResumenStatus =
   | 'pendiente'
   | 'enviado'
+  | 'en_revision'   // tono tenso — retenido para aprobación humana
   | 'sin_destinatarios'
   | 'sin_contraparte'
   | 'sin_contenido'
@@ -50,7 +52,20 @@ export interface ResumenRecord {
   resend_id: string | null;
   origen_nombre: string | null;
   origen_email: string | null;
+  tono: string | null;
+  idioma: string | null;
   status: ResumenStatus;
   error: string | null;
   procesado_en: string | null;
+}
+
+export type EstadoEnvio = 'enviado' | 'entregado' | 'rebotado' | 'quejado' | 'retrasado';
+
+export interface EnvioRecord {
+  resend_id: string;
+  recording_id: string;
+  email: string;
+  estado: EstadoEnvio;
+  detalle: string | null;
+  actualizado: string | null;
 }

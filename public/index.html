@@ -117,15 +117,25 @@
     .status.sin_destinatarios,
     .status.sin_contenido      { background: rgba(255,204,68,.1); color: #ffcc44; border: .5px solid rgba(255,204,68,.25); }
     .status.pendiente          { background: rgba(0,57,200,.12); color: #7ab4ff; border: .5px solid rgba(0,57,200,.28); }
+    .status.en_revision        { background: rgba(167,139,250,.14); color: #a78bfa; border: .5px solid rgba(167,139,250,.3); }
 
-    .retry-btn {
+    .retry-btn, .approve-btn {
       font-size: 10.5px; font-weight: 700; padding: 5px 11px; border-radius: 7px;
-      border: .5px solid rgba(86,239,159,.25); background: rgba(86,239,159,.08); color: var(--green);
       cursor: pointer; font-family: "Plus Jakarta Sans", sans-serif;
       transition: all .2s var(--ease);
     }
+    .retry-btn { border: .5px solid rgba(86,239,159,.25); background: rgba(86,239,159,.08); color: var(--green); }
     .retry-btn:hover:not(:disabled) { background: rgba(86,239,159,.18); }
-    .retry-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .approve-btn { border: .5px solid rgba(167,139,250,.3); background: rgba(167,139,250,.12); color: #a78bfa; }
+    .approve-btn:hover:not(:disabled) { background: rgba(167,139,250,.22); }
+    .retry-btn:disabled, .approve-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .unblock-btn {
+      font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 6px;
+      border: .5px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: rgba(255,255,255,.6);
+      cursor: pointer; font-family: "Plus Jakarta Sans", sans-serif; transition: all .2s var(--ease);
+    }
+    .unblock-btn:hover { color: #fff; background: rgba(255,255,255,.12); }
 
     .empty { text-align: center; padding: 40px 24px; }
     .empty-ico { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.04); border: .5px solid rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; font-size: 18px; margin: 0 auto 12px; }
@@ -207,9 +217,31 @@
     <div class="table-wrap">
       <table id="tabla">
         <thead>
-          <tr><th>Reunión</th><th>Folder</th><th>Origen (De)</th><th>Estado</th><th>Destinatarios</th><th>Procesado</th><th></th></tr>
+          <tr><th>Reunión</th><th>Folder</th><th>Origen (De)</th><th>Tono</th><th>Estado</th><th>Destinatarios</th><th>Procesado</th><th></th></tr>
         </thead>
-        <tbody><tr><td colspan="7">Cargando…</td></tr></tbody>
+        <tbody><tr><td colspan="8">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <div class="card-title">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>
+          </svg>
+          Direcciones bloqueadas
+        </div>
+        <div class="card-sub">Rebotaron o se quejaron — ya no se les escribe automáticamente</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="tablaBloqueados">
+        <thead>
+          <tr><th>Correo</th><th>Motivo</th><th>Detalle</th><th>Desde</th><th></th></tr>
+        </thead>
+        <tbody><tr><td colspan="5">Cargando…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -251,13 +283,38 @@ async function reintentar(folder, recordingId, btn) {
   finally { btn.disabled = false; }
 }
 
+async function aprobar(recordingId, btn) {
+  if (!confirm('¿Aprobar este borrador y enviarlo tal cual al cliente?')) return;
+  const orig = btn.textContent;
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const r = await fetch(`/aprobar/${encodeURIComponent(recordingId)}`, { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) { btn.textContent = '✓ Enviado'; cargar(); }
+    else { alert(d.error || 'No se pudo aprobar'); btn.textContent = orig; }
+  } catch { alert('Error de conexión'); btn.textContent = orig; }
+  finally { btn.disabled = false; }
+}
+
+async function desbloquear(email, btn) {
+  const orig = btn.textContent;
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const r = await fetch(`/bloqueados/${encodeURIComponent(email)}`, { method: 'DELETE' });
+    if (r.ok) cargarBloqueados();
+    else { alert('No se pudo desbloquear'); btn.textContent = orig; btn.disabled = false; }
+  } catch { alert('Error de conexión'); btn.textContent = orig; btn.disabled = false; }
+}
+
+const TONO_ICONO = { positivo: '🙂', neutral: '😐', tenso: '⚠️' };
+
 async function cargarResumenes() {
   const tbody = document.querySelector('#tabla tbody');
   try {
     const r = await fetch('/resumenes?limit=100');
     const { resumenes } = await r.json();
     if (!resumenes.length) {
-      tbody.innerHTML = `<tr><td colspan="7">
+      tbody.innerHTML = `<tr><td colspan="8">
         <div class="empty">
           <div class="empty-ico">📭</div>
           <div class="empty-t">Aún no hay resúmenes procesados</div>
@@ -268,19 +325,52 @@ async function cargarResumenes() {
     tbody.innerHTML = resumenes.map(r => {
       let dest = '—';
       try { dest = JSON.parse(r.destinatarios || '[]').join(', ') || '—'; } catch {}
-      const puedeReintentar = r.status !== 'enviado' && r.status !== 'pendiente';
+      const tono = r.tono ? `${TONO_ICONO[r.tono] || ''} ${esc(r.tono)}${r.idioma ? ` · ${esc(r.idioma)}` : ''}` : '—';
+      let accion = '';
+      if (r.status === 'en_revision') {
+        accion = `<button class="approve-btn" onclick="aprobar('${r.recording_id}', this)">✓ Aprobar y enviar</button>`;
+      } else if (r.status !== 'enviado' && r.status !== 'pendiente') {
+        accion = `<button class="retry-btn" onclick="reintentar('${r.folder}','${r.recording_id}', this)">↻ Reintentar</button>`;
+      }
       return `<tr>
         <td class="wrap">${esc(r.title) || '(sin título)'}</td>
         <td>${esc(r.folder)}</td>
         <td class="wrap">${esc(r.origen_nombre)}${r.origen_email ? ` &lt;${esc(r.origen_email)}&gt;` : ''}</td>
+        <td>${tono}</td>
         <td><span class="status ${r.status}">${r.status.replace(/_/g,' ')}</span></td>
         <td class="wrap">${esc(dest)}</td>
         <td>${esc((r.procesado_en || '—').replace('T',' ').slice(0,19))}</td>
-        <td>${puedeReintentar ? `<button class="retry-btn" onclick="reintentar('${r.folder}','${r.recording_id}', this)">↻ Reintentar</button>` : ''}</td>
+        <td>${accion}</td>
       </tr>`;
     }).join('');
   } catch {
-    tbody.innerHTML = '<tr><td colspan="7" style="color:#ff7070">Error cargando resúmenes</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="color:#ff7070">Error cargando resúmenes</td></tr>';
+  }
+}
+
+async function cargarBloqueados() {
+  const tbody = document.querySelector('#tablaBloqueados tbody');
+  try {
+    const r = await fetch('/bloqueados');
+    const { bloqueados } = await r.json();
+    if (!bloqueados.length) {
+      tbody.innerHTML = `<tr><td colspan="5">
+        <div class="empty">
+          <div class="empty-ico">✅</div>
+          <div class="empty-t">Ninguna dirección bloqueada</div>
+        </div>
+      </td></tr>`;
+      return;
+    }
+    tbody.innerHTML = bloqueados.map(b => `<tr>
+      <td>${esc(b.email)}</td>
+      <td>${esc(b.motivo)}</td>
+      <td class="wrap">${esc(b.detalle) || '—'}</td>
+      <td>${esc((b.bloqueado_en || '—').replace('T',' ').slice(0,19))}</td>
+      <td><button class="unblock-btn" onclick="desbloquear('${b.email}', this)">Desbloquear</button></td>
+    </tr>`).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#ff7070">Error cargando bloqueados</td></tr>';
   }
 }
 
@@ -320,7 +410,7 @@ async function cargarLogs() {
 }
 
 async function cargar() {
-  await Promise.all([cargarResumenes(), cargarLogs()]);
+  await Promise.all([cargarResumenes(), cargarBloqueados(), cargarLogs()]);
 }
 cargar();
 setInterval(cargar, 15000);

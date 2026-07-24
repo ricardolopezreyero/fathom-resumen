@@ -1,5 +1,5 @@
 // RLR
-import type { ResumenRecord } from './types';
+import type { ResumenRecord, EstadoEnvio } from './types';
 
 export async function hasResumen(db: D1Database, recordingId: string): Promise<boolean> {
   const row = await db.prepare('SELECT 1 FROM resumenes WHERE recording_id = ?').bind(recordingId).first();
@@ -12,8 +12,8 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
 
   if (!existing) {
     await db.prepare(`
-      INSERT INTO resumenes (recording_id, folder, title, created_at, share_url, resumen_texto, destinatarios, resend_id, origen_nombre, origen_email, status, error, procesado_en)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO resumenes (recording_id, folder, title, created_at, share_url, resumen_texto, destinatarios, resend_id, origen_nombre, origen_email, tono, idioma, status, error, procesado_en)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       r.recording_id,
       r.folder ?? '',
@@ -25,6 +25,8 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
       r.resend_id ?? null,
       r.origen_nombre ?? null,
       r.origen_email ?? null,
+      r.tono ?? null,
+      r.idioma ?? null,
       r.status ?? 'pendiente',
       r.error ?? null,
       r.procesado_en ?? null,
@@ -34,7 +36,7 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
 
   const merged = { ...existing, ...r };
   await db.prepare(`
-    UPDATE resumenes SET folder=?, title=?, created_at=?, share_url=?, resumen_texto=?, destinatarios=?, resend_id=?, origen_nombre=?, origen_email=?, status=?, error=?, procesado_en=?
+    UPDATE resumenes SET folder=?, title=?, created_at=?, share_url=?, resumen_texto=?, destinatarios=?, resend_id=?, origen_nombre=?, origen_email=?, tono=?, idioma=?, status=?, error=?, procesado_en=?
     WHERE recording_id=?
   `).bind(
     merged.folder,
@@ -46,11 +48,57 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
     merged.resend_id,
     merged.origen_nombre,
     merged.origen_email,
+    merged.tono,
+    merged.idioma,
     merged.status,
     merged.error,
     merged.procesado_en,
     merged.recording_id,
   ).run();
+}
+
+// ── Entregas (webhooks de Resend) ───────────────────────────────────────────
+
+export async function registrarEnvio(db: D1Database, params: { resendId: string; recordingId: string; email: string }): Promise<void> {
+  await db.prepare(`
+    INSERT OR IGNORE INTO envios (resend_id, recording_id, email, estado, actualizado)
+    VALUES (?, ?, ?, 'enviado', ?)
+  `).bind(params.resendId, params.recordingId, params.email, new Date().toISOString()).run();
+}
+
+export async function actualizarEstadoEnvio(db: D1Database, resendId: string, estado: EstadoEnvio, detalle?: string): Promise<{ recordingId: string; email: string } | null> {
+  const row = await db.prepare('SELECT recording_id, email FROM envios WHERE resend_id = ?')
+    .bind(resendId).first<{ recording_id: string; email: string }>();
+  if (!row) return null;
+
+  await db.prepare('UPDATE envios SET estado=?, detalle=?, actualizado=? WHERE resend_id=?')
+    .bind(estado, detalle ?? null, new Date().toISOString(), resendId).run();
+
+  return { recordingId: row.recording_id, email: row.email };
+}
+
+export async function estaBloqueado(db: D1Database, email: string): Promise<boolean> {
+  const row = await db.prepare('SELECT 1 FROM bloqueados WHERE email = ?').bind(email.toLowerCase()).first();
+  return row !== null;
+}
+
+export async function bloquearEmail(db: D1Database, email: string, motivo: 'rebote' | 'queja', detalle?: string): Promise<void> {
+  await db.prepare(`
+    INSERT INTO bloqueados (email, motivo, detalle, bloqueado_en)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET motivo=excluded.motivo, detalle=excluded.detalle, bloqueado_en=excluded.bloqueado_en
+  `).bind(email.toLowerCase(), motivo, detalle ?? null, new Date().toISOString()).run();
+}
+
+export async function listBloqueados(db: D1Database, limit = 100): Promise<{ email: string; motivo: string; detalle: string | null; bloqueado_en: string }[]> {
+  const { results } = await db.prepare(
+    'SELECT email, motivo, detalle, bloqueado_en FROM bloqueados ORDER BY bloqueado_en DESC LIMIT ?'
+  ).bind(limit).all();
+  return results as any;
+}
+
+export async function desbloquearEmail(db: D1Database, email: string): Promise<void> {
+  await db.prepare('DELETE FROM bloqueados WHERE email = ?').bind(email.toLowerCase()).run();
 }
 
 /**
