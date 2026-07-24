@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fathom · Resúmenes automáticos</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 32px; background: #f4f5f7; color: #1a2b4c; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.sub { color: #5b6472; margin-top: 0; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; margin-top: 20px; }
+  th, td { text-align: left; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #eef0f3; vertical-align: top; }
+  th { background: #f0f2f5; font-weight: 600; }
+  .status { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .status.enviado { background: #dcfce7; color: #166534; }
+  .status.error { background: #fee2e2; color: #991b1b; }
+  .status.sin_destinatarios { background: #fef3c7; color: #92400e; }
+  .status.pendiente { background: #e0e7ff; color: #3730a3; }
+  pre { white-space: pre-wrap; font-size: 12px; background: #0f1420; color: #d6dbe6; padding: 16px; border-radius: 8px; max-height: 400px; overflow: auto; }
+  #logs-section { margin-top: 32px; }
+</style>
+</head>
+<body>
+  <h1>Fathom · Resúmenes automáticos</h1>
+  <p class="sub">Genera un resumen con Workers AI y envía un correo de seguimiento vía Resend cada vez que llega una transcripción nueva.</p>
+
+  <table id="tabla">
+    <thead>
+      <tr><th>Reunión</th><th>Folder</th><th>Fecha</th><th>Estado</th><th>Destinatarios</th><th>Procesado</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="logs-section">
+    <h2 style="font-size:16px;">Logs recientes</h2>
+    <pre id="logs">Cargando…</pre>
+  </div>
+
+<script>
+async function cargar() {
+  const r = await fetch('/resumenes?limit=100');
+  const { resumenes } = await r.json();
+  const tbody = document.querySelector('#tabla tbody');
+  tbody.innerHTML = resumenes.map(r => {
+    let dest = '—';
+    try { dest = JSON.parse(r.destinatarios || '[]').join(', ') || '—'; } catch {}
+    return `<tr>
+      <td>${r.title || '(sin título)'}</td>
+      <td>${r.folder}</td>
+      <td>${r.created_at || '—'}</td>
+      <td><span class="status ${r.status}">${r.status}</span></td>
+      <td>${dest}</td>
+      <td>${r.procesado_en || '—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6">Aún no hay resúmenes procesados.</td></tr>';
+
+  const rl = await fetch('/logs?lines=120');
+  const { logs } = await rl.json();
+  document.getElementById('logs').textContent = logs || '(sin logs)';
+}
+cargar();
+setInterval(cargar, 15000);
+</script>
+</body>
+</html>
