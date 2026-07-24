@@ -68,6 +68,7 @@ export async function handleResumenMessage(msg: ResumenTriggerMessage, env: Env)
   // el mensaje completo (duplicaría correos ya enviados con éxito).
   let enviados = 0;
   const errores: string[] = [];
+  const resendIds: Record<string, string> = {};
   for (const persona of destinatarios) {
     const resultado = await sendResumenEmail(env, {
       to: persona.email!,
@@ -78,6 +79,7 @@ export async function handleResumenMessage(msg: ResumenTriggerMessage, env: Env)
     });
     if (resultado.ok) {
       enviados++;
+      if (resultado.id) resendIds[persona.email!] = resultado.id;
       await insertLog(env.DB, 'INFO', `  ✉ Enviado a ${persona.email} (id: ${resultado.id})`, recording_id);
     } else {
       errores.push(`${persona.email}: ${resultado.error}`);
@@ -88,6 +90,7 @@ export async function handleResumenMessage(msg: ResumenTriggerMessage, env: Env)
   await upsertResumen(env.DB, {
     recording_id,
     destinatarios: JSON.stringify(destinatarios.map(p => p.email)),
+    resend_id: JSON.stringify(resendIds),
     status: enviados > 0 ? 'enviado' : 'error',
     error: errores.length ? errores.join(' | ') : null,
     procesado_en: new Date().toISOString(),
