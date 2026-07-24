@@ -1,48 +1,238 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="author" content="Ricardo López Reyero">
-<meta name="build" content="eye">
-<meta name="rev" content="181218">
-<title>Fathom · Resúmenes automáticos</title>
-<!-- RLR -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="author" content="Ricardo López Reyero">
+  <meta name="build" content="eye">
+  <meta name="rev" content="181218">
+  <title>Fathom Resumen · SuperLeads</title>
+  <!-- RLR -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700;1,800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-<style>
-  :root { color-scheme: light dark; }
-  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 32px; background: #f4f5f7; color: #1a2b4c; }
-  h1 { font-size: 20px; margin-bottom: 4px; }
-  p.sub { color: #5b6472; margin-top: 0; font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; margin-top: 20px; }
-  th, td { text-align: left; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #eef0f3; vertical-align: top; }
-  th { background: #f0f2f5; font-weight: 600; }
-  .status { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-  .status.enviado { background: #dcfce7; color: #166534; }
-  .status.error { background: #fee2e2; color: #991b1b; }
-  .status.sin_destinatarios, .status.sin_contenido { background: #fef3c7; color: #92400e; }
-  .status.pendiente { background: #e0e7ff; color: #3730a3; }
-  .retry-btn { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid #d8dce3; background: #fff; cursor: pointer; }
-  .retry-btn:hover { background: #f0f2f5; }
-  pre { white-space: pre-wrap; font-size: 12px; background: #0f1420; color: #d6dbe6; padding: 16px; border-radius: 8px; max-height: 400px; overflow: auto; }
-  #logs-section { margin-top: 32px; }
-</style>
+    :root {
+      --green:     #56EF9F;
+      --green-d:   #2BC878;
+      --navy-deep: #001240;
+      --navy-mid:  #001a5e;
+      --navy:      #002582;
+      --blue:      #0039C8;
+      --blue-mid:  #2A89FB;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+      --text-sub:  #7a9fd4;
+      --text-dim:  #4a6aaa;
+      --border-g:  rgba(86,239,159,.18);
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--navy-deep);
+      color: #fff;
+      font-family: "Plus Jakarta Sans", -apple-system, sans-serif;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: ""; position: fixed; right: -120px; top: -120px;
+      width: 600px; height: 600px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(86,239,159,.05) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 56px;
+      background: rgba(0,18,64,.97);
+      border-bottom: .5px solid rgba(86,239,159,.1);
+      backdrop-filter: blur(16px);
+    }
+    .nav-left { display: flex; align-items: center; gap: 16px; }
+    .nav-logo { height: 26px; }
+    .nav-sep { width: .5px; height: 18px; background: rgba(255,255,255,.14); }
+    .nav-name { font-size: 13px; font-weight: 700; color: var(--green); letter-spacing: .3px; }
+    .live-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      padding: 4px 11px 4px 9px; border-radius: 20px;
+      background: rgba(86,239,159,.1); color: var(--green);
+      border: .5px solid rgba(86,239,159,.25);
+    }
+    .live-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+      animation: pulse 2.2s ease infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+    .nav-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 13px; border-radius: 8px;
+      font-size: 12px; font-weight: 700;
+      color: rgba(255,255,255,.55);
+      border: .5px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      text-decoration: none;
+      transition: all .2s var(--ease); white-space: nowrap;
+    }
+    .nav-link:hover { color: var(--green); border-color: rgba(86,239,159,.3); background: rgba(86,239,159,.07); }
+
+    /* ── Layout ── */
+    main { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 52px 24px 80px; }
+
+    /* ── Hero ── */
+    .hero { margin-bottom: 36px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .ew-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .ew-t { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.3px; color: var(--green); }
+    .hero h1 { font-size: 32px; font-weight: 800; letter-spacing: -.8px; line-height: 1.12; margin-bottom: 10px; }
+    .hero h1 em { font-style: italic; color: var(--green); }
+    .hero p { font-size: 14px; color: var(--text-sub); line-height: 1.7; max-width: 620px; }
+
+    /* ── Card ── */
+    .card {
+      background: rgba(255,255,255,.03);
+      border: .5px solid rgba(255,255,255,.09);
+      border-radius: 16px; padding: 26px 30px; margin-bottom: 20px;
+      transition: border-color .3s;
+    }
+    .card:hover { border-color: rgba(86,239,159,.13); }
+    .card-hd { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+    .card-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+    .card-title svg { color: var(--green); flex-shrink: 0; }
+    .card-sub { font-size: 11px; color: var(--text-dim); margin-top: 3px; font-weight: 400; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 12px; font-size: 12.5px; border-bottom: .5px solid rgba(255,255,255,.07); vertical-align: top; white-space: nowrap; }
+    th { color: var(--text-dim); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: .6px; }
+    td { color: rgba(255,255,255,.82); }
+    td.wrap { white-space: normal; }
+
+    .status { display: inline-flex; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+    .status.enviado           { background: rgba(86,239,159,.12); color: var(--green); border: .5px solid rgba(86,239,159,.25); }
+    .status.error              { background: rgba(255,75,75,.1); color: #ff7070; border: .5px solid rgba(255,75,75,.25); }
+    .status.sin_destinatarios,
+    .status.sin_contenido      { background: rgba(255,204,68,.1); color: #ffcc44; border: .5px solid rgba(255,204,68,.25); }
+    .status.pendiente          { background: rgba(0,57,200,.12); color: #7ab4ff; border: .5px solid rgba(0,57,200,.28); }
+
+    .retry-btn {
+      font-size: 10.5px; font-weight: 700; padding: 5px 11px; border-radius: 7px;
+      border: .5px solid rgba(86,239,159,.25); background: rgba(86,239,159,.08); color: var(--green);
+      cursor: pointer; font-family: "Plus Jakarta Sans", sans-serif;
+      transition: all .2s var(--ease);
+    }
+    .retry-btn:hover:not(:disabled) { background: rgba(86,239,159,.18); }
+    .retry-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .empty { text-align: center; padding: 40px 24px; }
+    .empty-ico { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.04); border: .5px solid rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; font-size: 18px; margin: 0 auto 12px; }
+    .empty-t { font-size: 13px; font-weight: 700; color: rgba(255,255,255,.45); }
+
+    /* ── Logs ── */
+    .log-card {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: rgba(0,0,0,.25); border: .5px solid rgba(255,255,255,.06);
+      border-radius: 9px; padding: 11px 14px;
+      transition: border-color .2s; animation: fIn .25s var(--ease);
+    }
+    .log-card + .log-card { margin-top: 8px; }
+    .log-card:hover { border-color: rgba(255,255,255,.12); }
+    .log-card.log-ok    { border-left: 2px solid var(--green); }
+    .log-card.log-error { border-left: 2px solid #ff7070; }
+    .log-card.log-warn  { border-left: 2px solid #ffcc44; }
+    .log-badge {
+      flex-shrink: 0; margin-top: 1px;
+      width: 28px; height: 18px; border-radius: 4px;
+      font-size: 9px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .log-badge.INFO    { background: rgba(122,180,255,.15); color: #7ab4ff; }
+    .log-badge.WARNING { background: rgba(255,204,68,.15);  color: #ffcc44; }
+    .log-badge.ERROR   { background: rgba(255,112,112,.15); color: #ff7070; }
+    .log-body { flex: 1; min-width: 0; }
+    .log-ts { font-family: "SF Mono", monospace; font-size: 10px; color: var(--text-dim); margin-bottom: 3px; }
+    .log-msg { font-family: "SF Mono", monospace; font-size: 11.5px; line-height: 1.5; word-break: break-word; color: #c8d8f0; }
+    @keyframes fIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+    @media (max-width: 640px) {
+      nav { padding: 14px 18px; }
+      main { padding: 28px 16px 56px; }
+      .hero h1 { font-size: 24px; }
+      .card { padding: 20px; }
+      .nav-link span { display: none; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Fathom · Resúmenes automáticos</h1>
-  <p class="sub">Genera un resumen con Workers AI y envía un correo de seguimiento vía Resend cada vez que llega una transcripción nueva.</p>
 
-  <table id="tabla">
-    <thead>
-      <tr><th>Reunión</th><th>Folder</th><th>Origen (De)</th><th>Estado</th><th>Destinatarios</th><th>Procesado</th><th></th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <div id="logs-section">
-    <h2 style="font-size:16px;">Logs recientes</h2>
-    <pre id="logs">Cargando…</pre>
+<nav>
+  <div class="nav-left">
+    <img src="https://assets.cdn.filesafe.space/E6Gh1sE1RnPtadmL7wmG/media/698e530bc08665d629146a14.png"
+         alt="SuperLeads" class="nav-logo" />
+    <div class="nav-sep"></div>
+    <span class="nav-name">Fathom Resumen</span>
   </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="live-badge"><div class="live-dot"></div>Servicio activo</div>
+    <a href="https://fathom.superleads.mx" class="nav-link">
+      <span>Ir a Fathom</span>
+    </a>
+  </div>
+</nav>
+
+<main>
+
+  <div class="hero">
+    <div class="eyebrow"><div class="ew-dot"></div><div class="ew-t">Herramienta interna · SuperLeads</div></div>
+    <h1>Resúmenes <em>automáticos</em> por correo</h1>
+    <p>Cada reunión nueva que llega por webhook genera un resumen con Workers AI y un correo de seguimiento vía Resend — firmado siempre por quien realmente tuvo la llamada.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <div class="card-title">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          Resúmenes procesados
+        </div>
+        <div class="card-sub">Últimos 100 · se actualiza cada 15s</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="tabla">
+        <thead>
+          <tr><th>Reunión</th><th>Folder</th><th>Origen (De)</th><th>Estado</th><th>Destinatarios</th><th>Procesado</th><th></th></tr>
+        </thead>
+        <tbody><tr><td colspan="7">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <div class="card-title">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          Actividad en tiempo real
+        </div>
+        <div class="card-sub">Logs del sistema</div>
+      </div>
+    </div>
+    <div id="logBox">
+      <div style="font-family:'SF Mono',monospace;font-size:11px;color:#4a6aaa;padding:4px 0">Cargando…</div>
+    </div>
+  </div>
+
+</main>
 
 <script>
 function esc(s) {
@@ -55,34 +245,82 @@ async function reintentar(folder, recordingId, btn) {
   try {
     const r = await fetch(`/reintentar/${encodeURIComponent(folder)}/${encodeURIComponent(recordingId)}`, { method: 'POST' });
     const d = await r.json();
-    if (r.ok) { btn.textContent = '✓'; cargar(); }
+    if (r.ok) { btn.textContent = '✓ Enviado'; cargar(); }
     else { alert(d.error || 'No se pudo reintentar'); btn.textContent = orig; }
   } catch { alert('Error de conexión'); btn.textContent = orig; }
   finally { btn.disabled = false; }
 }
 
-async function cargar() {
-  const r = await fetch('/resumenes?limit=100');
-  const { resumenes } = await r.json();
+async function cargarResumenes() {
   const tbody = document.querySelector('#tabla tbody');
-  tbody.innerHTML = resumenes.map(r => {
-    let dest = '—';
-    try { dest = JSON.parse(r.destinatarios || '[]').join(', ') || '—'; } catch {}
-    const puedeReintentar = r.status !== 'enviado' && r.status !== 'pendiente';
-    return `<tr>
-      <td>${esc(r.title) || '(sin título)'}</td>
-      <td>${esc(r.folder)}</td>
-      <td>${esc(r.origen_nombre)}${r.origen_email ? ` &lt;${esc(r.origen_email)}&gt;` : ''}</td>
-      <td><span class="status ${r.status}">${r.status}</span></td>
-      <td>${esc(dest)}</td>
-      <td>${esc(r.procesado_en) || '—'}</td>
-      <td>${puedeReintentar ? `<button class="retry-btn" onclick="reintentar('${r.folder}','${r.recording_id}', this)">↻ Reintentar</button>` : ''}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="7">Aún no hay resúmenes procesados.</td></tr>';
+  try {
+    const r = await fetch('/resumenes?limit=100');
+    const { resumenes } = await r.json();
+    if (!resumenes.length) {
+      tbody.innerHTML = `<tr><td colspan="7">
+        <div class="empty">
+          <div class="empty-ico">📭</div>
+          <div class="empty-t">Aún no hay resúmenes procesados</div>
+        </div>
+      </td></tr>`;
+      return;
+    }
+    tbody.innerHTML = resumenes.map(r => {
+      let dest = '—';
+      try { dest = JSON.parse(r.destinatarios || '[]').join(', ') || '—'; } catch {}
+      const puedeReintentar = r.status !== 'enviado' && r.status !== 'pendiente';
+      return `<tr>
+        <td class="wrap">${esc(r.title) || '(sin título)'}</td>
+        <td>${esc(r.folder)}</td>
+        <td class="wrap">${esc(r.origen_nombre)}${r.origen_email ? ` &lt;${esc(r.origen_email)}&gt;` : ''}</td>
+        <td><span class="status ${r.status}">${r.status.replace(/_/g,' ')}</span></td>
+        <td class="wrap">${esc(dest)}</td>
+        <td>${esc((r.procesado_en || '—').replace('T',' ').slice(0,19))}</td>
+        <td>${puedeReintentar ? `<button class="retry-btn" onclick="reintentar('${r.folder}','${r.recording_id}', this)">↻ Reintentar</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:#ff7070">Error cargando resúmenes</td></tr>';
+  }
+}
 
-  const rl = await fetch('/logs?lines=120');
-  const { logs } = await rl.json();
-  document.getElementById('logs').textContent = logs || '(sin logs)';
+function classifyLevel(level) {
+  if (level === 'ERROR') return 'log-error';
+  if (level === 'WARNING') return 'log-warn';
+  return 'log-ok';
+}
+
+async function cargarLogs() {
+  const box = document.getElementById('logBox');
+  try {
+    const r = await fetch('/logs?lines=100');
+    const { logs } = await r.json();
+    const lines = (logs || '').split('\n').filter(Boolean);
+    if (!lines.length) {
+      box.innerHTML = '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#4a6aaa;padding:4px 0">Sin actividad aún.</div>';
+      return;
+    }
+    const tsRe = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(INFO|WARNING|ERROR)\s+(.*)/;
+    const events = [];
+    for (const line of lines) {
+      const m = line.match(tsRe);
+      if (m) events.push({ ts: m[1], level: m[2], msg: m[3].trim() });
+    }
+    box.innerHTML = events.slice(-30).reverse().map(ev => `
+      <div class="log-card ${classifyLevel(ev.level)}">
+        <div class="log-badge ${ev.level}">${ev.level.slice(0,4)}</div>
+        <div class="log-body">
+          <div class="log-ts">${esc(ev.ts)}</div>
+          <div class="log-msg">${esc(ev.msg)}</div>
+        </div>
+      </div>`).join('');
+  } catch {
+    box.innerHTML = '<div style="color:#ff7070;font-size:12px">Error cargando logs</div>';
+  }
+}
+
+async function cargar() {
+  await Promise.all([cargarResumenes(), cargarLogs()]);
 }
 cargar();
 setInterval(cargar, 15000);
