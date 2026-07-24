@@ -21,6 +21,13 @@ binding = "DB"
 database_name = "fathom-resumen-db"
 database_id = "7b626233-67da-41a5-a6b1-2db1c3828f76"
 
+# Réplica de solo lectura de fanthom-superleads — únicamente para reconstruir
+# y reintentar manualmente un resumen (ver src/db.ts reconstruirTrigger).
+[[d1_databases]]
+binding = "FANTHOM_DB"
+database_name = "fanthom-db"
+database_id = "22d59ce7-2034-4395-a105-dd069c89d470"
+
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "fanthom-transcripciones"

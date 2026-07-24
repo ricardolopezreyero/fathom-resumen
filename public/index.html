@@ -20,8 +20,10 @@
   .status { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
   .status.enviado { background: #dcfce7; color: #166534; }
   .status.error { background: #fee2e2; color: #991b1b; }
-  .status.sin_destinatarios { background: #fef3c7; color: #92400e; }
+  .status.sin_destinatarios, .status.sin_contenido { background: #fef3c7; color: #92400e; }
   .status.pendiente { background: #e0e7ff; color: #3730a3; }
+  .retry-btn { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid #d8dce3; background: #fff; cursor: pointer; }
+  .retry-btn:hover { background: #f0f2f5; }
   pre { white-space: pre-wrap; font-size: 12px; background: #0f1420; color: #d6dbe6; padding: 16px; border-radius: 8px; max-height: 400px; overflow: auto; }
   #logs-section { margin-top: 32px; }
 </style>
@@ -32,7 +34,7 @@
 
   <table id="tabla">
     <thead>
-      <tr><th>Reunión</th><th>Folder</th><th>Fecha</th><th>Estado</th><th>Destinatarios</th><th>Procesado</th></tr>
+      <tr><th>Reunión</th><th>Folder</th><th>Origen (De)</th><th>Estado</th><th>Destinatarios</th><th>Procesado</th><th></th></tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -43,6 +45,22 @@
   </div>
 
 <script>
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function reintentar(folder, recordingId, btn) {
+  const orig = btn.textContent;
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const r = await fetch(`/reintentar/${encodeURIComponent(folder)}/${encodeURIComponent(recordingId)}`, { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) { btn.textContent = '✓'; cargar(); }
+    else { alert(d.error || 'No se pudo reintentar'); btn.textContent = orig; }
+  } catch { alert('Error de conexión'); btn.textContent = orig; }
+  finally { btn.disabled = false; }
+}
+
 async function cargar() {
   const r = await fetch('/resumenes?limit=100');
   const { resumenes } = await r.json();
@@ -50,15 +68,17 @@ async function cargar() {
   tbody.innerHTML = resumenes.map(r => {
     let dest = '—';
     try { dest = JSON.parse(r.destinatarios || '[]').join(', ') || '—'; } catch {}
+    const puedeReintentar = r.status !== 'enviado' && r.status !== 'pendiente';
     return `<tr>
-      <td>${r.title || '(sin título)'}</td>
-      <td>${r.folder}</td>
-      <td>${r.created_at || '—'}</td>
+      <td>${esc(r.title) || '(sin título)'}</td>
+      <td>${esc(r.folder)}</td>
+      <td>${esc(r.origen_nombre)}${r.origen_email ? ` &lt;${esc(r.origen_email)}&gt;` : ''}</td>
       <td><span class="status ${r.status}">${r.status}</span></td>
-      <td>${dest}</td>
-      <td>${r.procesado_en || '—'}</td>
+      <td>${esc(dest)}</td>
+      <td>${esc(r.procesado_en) || '—'}</td>
+      <td>${puedeReintentar ? `<button class="retry-btn" onclick="reintentar('${r.folder}','${r.recording_id}', this)">↻ Reintentar</button>` : ''}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6">Aún no hay resúmenes procesados.</td></tr>';
+  }).join('') || '<tr><td colspan="7">Aún no hay resúmenes procesados.</td></tr>';
 
   const rl = await fetch('/logs?lines=120');
   const { logs } = await rl.json();

@@ -1,5 +1,10 @@
+// RLR
 export interface Env {
   DB: D1Database;
+  // Réplica de solo-lectura de la base de fanthom-superleads — se usa
+  // únicamente para reconstruir un disparo y reintentarlo manualmente
+  // (ver /reintentar en index.ts). Nunca se escribe en ella desde aquí.
+  FANTHOM_DB: D1Database;
   R2: R2Bucket;
   AI: Ai;
   ASSETS: Fetcher;
@@ -20,7 +25,19 @@ export interface ResumenTriggerMessage {
   share_url: string;
   recorded_by: ResumenPersona | null;
   invitees: ResumenPersona[];
+  // Identidad registrada del colaborador dueño de la cuenta Fathom que generó
+  // esta transcripción — fuente de verdad preferida para el "De"/Reply-To.
+  colaborador_nombre?: string;
+  colaborador_email?: string | null;
 }
+
+export type ResumenStatus =
+  | 'pendiente'
+  | 'enviado'
+  | 'sin_destinatarios'
+  | 'sin_contraparte'
+  | 'sin_contenido'
+  | 'error';
 
 export interface ResumenRecord {
   recording_id: string;
@@ -31,7 +48,9 @@ export interface ResumenRecord {
   resumen_texto: string | null;
   destinatarios: string | null;
   resend_id: string | null;
-  status: 'pendiente' | 'enviado' | 'sin_destinatarios' | 'error';
+  origen_nombre: string | null;
+  origen_email: string | null;
+  status: ResumenStatus;
   error: string | null;
   procesado_en: string | null;
 }

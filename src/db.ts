@@ -12,8 +12,8 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
 
   if (!existing) {
     await db.prepare(`
-      INSERT INTO resumenes (recording_id, folder, title, created_at, share_url, resumen_texto, destinatarios, resend_id, status, error, procesado_en)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO resumenes (recording_id, folder, title, created_at, share_url, resumen_texto, destinatarios, resend_id, origen_nombre, origen_email, status, error, procesado_en)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       r.recording_id,
       r.folder ?? '',
@@ -23,6 +23,8 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
       r.resumen_texto ?? null,
       r.destinatarios ?? null,
       r.resend_id ?? null,
+      r.origen_nombre ?? null,
+      r.origen_email ?? null,
       r.status ?? 'pendiente',
       r.error ?? null,
       r.procesado_en ?? null,
@@ -32,7 +34,7 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
 
   const merged = { ...existing, ...r };
   await db.prepare(`
-    UPDATE resumenes SET folder=?, title=?, created_at=?, share_url=?, resumen_texto=?, destinatarios=?, resend_id=?, status=?, error=?, procesado_en=?
+    UPDATE resumenes SET folder=?, title=?, created_at=?, share_url=?, resumen_texto=?, destinatarios=?, resend_id=?, origen_nombre=?, origen_email=?, status=?, error=?, procesado_en=?
     WHERE recording_id=?
   `).bind(
     merged.folder,
@@ -42,11 +44,54 @@ export async function upsertResumen(db: D1Database, r: Partial<ResumenRecord> & 
     merged.resumen_texto,
     merged.destinatarios,
     merged.resend_id,
+    merged.origen_nombre,
+    merged.origen_email,
     merged.status,
     merged.error,
     merged.procesado_en,
     merged.recording_id,
   ).run();
+}
+
+/**
+ * Reconstruye un ResumenTriggerMessage completo consultando fanthom-superleads
+ * (solo lectura) — permite reintentar un resumen sin depender del mensaje
+ * original de la cola, que ya no existe una vez procesado.
+ */
+export async function reconstruirTrigger(
+  fanthomDb: D1Database,
+  folder: string,
+  recordingId: string,
+): Promise<import('./types').ResumenTriggerMessage | null> {
+  const meeting = await fanthomDb.prepare(
+    'SELECT filename, title, created_at, share_url, recorded_by, invitees FROM meetings WHERE folder = ? AND recording_id = ?'
+  ).bind(folder, recordingId).first<{
+    filename: string; title: string | null; created_at: string | null;
+    share_url: string | null; recorded_by: string | null; invitees: string | null;
+  }>();
+  if (!meeting) return null;
+
+  const colab = await fanthomDb.prepare(
+    'SELECT nombre, email FROM colaboradores WHERE folder = ?'
+  ).bind(folder).first<{ nombre: string; email: string | null }>();
+
+  const parseJson = <T>(s: string | null, fallback: T): T => {
+    if (!s) return fallback;
+    try { return JSON.parse(s) as T; } catch { return fallback; }
+  };
+
+  return {
+    folder,
+    recording_id: recordingId,
+    r2_key: `${folder}/${meeting.filename}`,
+    title: meeting.title ?? '',
+    created_at: meeting.created_at ?? '',
+    share_url: meeting.share_url ?? '',
+    recorded_by: parseJson(meeting.recorded_by, null),
+    invitees: parseJson(meeting.invitees, []),
+    colaborador_nombre: colab?.nombre,
+    colaborador_email: colab?.email ?? null,
+  };
 }
 
 export async function listResumenes(db: D1Database, limit = 50): Promise<ResumenRecord[]> {

@@ -1,6 +1,6 @@
 // RLR
-import type { Env, ResumenTriggerMessage } from './types';
-import { listResumenes, getLogs, insertLog } from './db';
+import type { Env, ResumenTriggerMessage, ResumenRecord } from './types';
+import { listResumenes, getLogs, insertLog, reconstruirTrigger } from './db';
 import { handleResumenMessage } from './queue-handler';
 
 // Ricardo López Reyero
@@ -52,6 +52,32 @@ export default {
         }
         await insertLog(env.DB, 'INFO', `▶ Prueba manual disparada: ${body.title ?? body.recording_id}`, body.recording_id);
         await handleResumenMessage(body, env);
+        return json({ ok: true });
+      }
+
+      // POST /reintentar/:folder/:recording_id[?force=1] — reconstruye el
+      // disparo desde fanthom-db (ya no depende del mensaje original de la
+      // cola, que se pierde una vez procesado) y reprocesa. Por seguridad, si
+      // ya se envió con éxito antes, exige ?force=1 para evitar duplicar
+      // correos a un cliente real por error de operación.
+      if (method === 'POST' && pathname.startsWith('/reintentar/')) {
+        const partes = pathname.slice('/reintentar/'.length).split('/');
+        const folder = partes[0];
+        const recordingId = partes[1];
+        if (!folder || !recordingId) return json({ error: 'Uso: /reintentar/:folder/:recording_id' }, 400);
+
+        const existente = await env.DB.prepare('SELECT status FROM resumenes WHERE recording_id = ?')
+          .bind(recordingId).first<Pick<ResumenRecord, 'status'>>();
+        const force = url.searchParams.get('force') === '1';
+        if (existente?.status === 'enviado' && !force) {
+          return json({ error: 'Ya se envió con éxito anteriormente. Usa ?force=1 si de verdad quieres reenviarlo.' }, 409);
+        }
+
+        const trigger = await reconstruirTrigger(env.FANTHOM_DB, folder, recordingId);
+        if (!trigger) return json({ error: 'No se encontró esa reunión en fanthom-db (folder/recording_id incorrectos, o es muy antigua)' }, 404);
+
+        await insertLog(env.DB, 'INFO', `▶ Reintento manual: ${trigger.title || recordingId}`, recordingId);
+        await handleResumenMessage(trigger, env, { force: true });
         return json({ ok: true });
       }
 
