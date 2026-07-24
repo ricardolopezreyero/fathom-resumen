@@ -1,3 +1,4 @@
+// RLR
 import type { ResumenRecord } from './types';
 
 export async function hasResumen(db: D1Database, recordingId: string): Promise<boolean> {

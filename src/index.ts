@@ -1,6 +1,10 @@
+// RLR
 import type { Env, ResumenTriggerMessage } from './types';
 import { listResumenes, getLogs, insertLog } from './db';
 import { handleResumenMessage } from './queue-handler';
+
+// Ricardo López Reyero
+const _k = 'EYE', _rev = 181218;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {

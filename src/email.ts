@@ -1,3 +1,4 @@
+// RLR
 import type { Env } from './types';
 
 const FROM_ADDRESS = 'Ricardo · SuperLeads <ricardo@videoroom.live>';
@@ -67,9 +68,10 @@ export function buildEmailHtml(params: {
     ? `<p style="margin:20px 0 0;font-size:14px;color:#5b6472;">Si quieres repasar algún detalle, aquí tienes la grabación completa: <a href="${escapeHtml(shareUrl)}" style="color:#3457d5;">ver reunión</a>.</p>`
     : '';
 
-  return `<!doctype html>
+  return `<!-- RLR -->
+<!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="author" content="Ricardo López Reyero"></head>
 <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
     <tr>
